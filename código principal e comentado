@@ -1,110 +1,94 @@
 #include <Arduino.h>
 
-// ---- Definições de pinos ----
-#define trigPin 5
-#define echoPin 6
-#define buzzer1 9     // primeiro buzzer
-#define buzzer2 13    // segundo buzzer
+#define trig 5
+#define echo 6
+#define buzzer1 12
+#define buzzer2 13
 #define led 11
-#define soundSensor A0
+#define som A0
 
-// ---- Variáveis ----
-long duracao;     // tempo do pulso ultrassônico
-int distancia;    // distância em cm
-int soundValue;   // valor lido do sensor de som
+long duracao_pulso;
+int distancia_cm;
+int barulho;
 
-// ---- Setup ----
 void setup() {
-  pinMode(trigPin, OUTPUT);
-  pinMode(echoPin, INPUT);
+  pinMode(trig, OUTPUT);
   pinMode(buzzer1, OUTPUT);
   pinMode(buzzer2, OUTPUT);
   pinMode(led, OUTPUT);
-  pinMode(soundSensor, INPUT);
 
-  Serial.begin(9600); // monitor serial
-  Serial.println("=== SISTEMA INICIADO ===");
+  pinMode(echo, INPUT);
+  pinMode(som, INPUT);
+
+  Serial.begin(9600);
+  Serial.println("=== Sistema Iniciado ===");
 }
 
-// ---- Função para medir distância com HC-SR04 ----
-void medirDistancia() {
-  digitalWrite(trigPin, LOW);
+void Alarme() {
+  for (int i = 0; i < 50; i++) {
+    digitalWrite(buzzer1, HIGH);
+    digitalWrite(buzzer2, HIGH);
+    delay(50);
+    digitalWrite(buzzer1, LOW);
+    digitalWrite(buzzer2, LOW);
+    delay(50);
+  }
+}
+
+void medeDistancia() {
+  digitalWrite(trig, LOW);
   delayMicroseconds(2);
-  digitalWrite(trigPin, HIGH);
+  digitalWrite(trig, HIGH);
   delayMicroseconds(10);
-  digitalWrite(trigPin, LOW);
+  digitalWrite(trig, LOW);
 
-  duracao = pulseIn(echoPin, HIGH);
-  distancia = duracao * 0.034 / 2;  // converte em centímetros
+  duracao_pulso = pulseIn(echo, HIGH);
+  distancia_cm = duracao_pulso * 0.034 / 2;
 
-  // Tratamento: se distância inválida, forçar 0 (sem objeto)
-  if (distancia < 2 || distancia > 400) {
-    distancia = 0;
+  if (distancia_cm < 2 || distancia_cm > 400) {
+    distancia_cm = 0;
   }
 }
 
-// ---- Função para deficiência visual (buzzer proporcional com pulsos) ----
-bool sensorVisual() {
-  if (distancia > 0 && distancia <= 30) {
-    // Quanto mais perto, maior a intensidade
-    int intensidade = map(distancia, 30, 0, 30, 255);
-    intensidade = constrain(intensidade, 30, 255);
+bool alertaDeObstaculo() {
+  if (distancia_cm > 0 && distancia_cm <= 30) {
+    int tempo_bipe = map(distancia_cm, 1, 30, 50, 300);
 
-    // Pulsos perceptíveis em ambos os buzzers
-    analogWrite(buzzer1, intensidade);
-    analogWrite(buzzer2, intensidade);
-    delay(100);
-    analogWrite(buzzer1, 0);
-    analogWrite(buzzer2, 0);
-    delay(100);
+    digitalWrite(buzzer1, HIGH);
+    digitalWrite(buzzer2, HIGH);
+    delay(50);
+    digitalWrite(buzzer1, LOW);
+    digitalWrite(buzzer2, LOW);
+    delay(tempo_bipe);
 
-    return true; // sinaliza que o aviso foi acionado
-  } else {
-    analogWrite(buzzer1, 0);
-    analogWrite(buzzer2, 0);
-    return false;
+    return true;
   }
+  return false;
 }
 
-// ---- Função para deficiência auditiva/motora (níveis de som) ----
-void sensorAuditivoMotor() {
-  soundValue = analogRead(soundSensor);
+void VerificaBarulho() {
+  barulho = analogRead(som);
 
-  // Print bonito no Serial Monitor
-  Serial.println("\n--- LEITURA ---");
-  Serial.print("Distância: ");
-  Serial.print(distancia);
-  Serial.println(" cm");
-  Serial.print("Som captado: ");
-  Serial.println(soundValue);
-  Serial.println("---------------");
-
-  if (soundValue > 40 && soundValue <= 50) {  // barulho moderado
+  if (barulho >= 70) {
     digitalWrite(led, HIGH);
     delay(5000);
     digitalWrite(led, LOW);
-  } 
-  else if (soundValue > 50) {  // barulho alto/grito
-    digitalWrite(led, HIGH);   
-    // Som forte nos dois buzzers
-    tone(buzzer1, 400); // grave = mais alto
-    tone(buzzer2, 400);
-    delay(5000);
-    noTone(buzzer1);
-    noTone(buzzer2);
-    digitalWrite(led, LOW);
+  } else if (barulho >= 50 && barulho <= 69) {
+    Alarme();
   }
 }
 
-// ---- Loop principal ----
 void loop() {
-  medirDistancia();
+  medeDistancia();
 
-  // Se objeto próximo, prioridade é alerta visual (buzzer pulsado)
-  if (!sensorVisual()) {
-    // Se nada perto, verifica som
-    sensorAuditivoMotor();
+  Serial.print("Distancia: ");
+  Serial.print(distancia_cm);
+  Serial.print(" cm | Intensidade do Barulho: ");
+  Serial.println(analogRead(som));
+
+  if (!alertaDeObstaculo()) {
+    VerificaBarulho();
   }
 
-  delay(50);
+  delay(100);
 }
