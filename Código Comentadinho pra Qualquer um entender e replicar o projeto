@@ -1,0 +1,138 @@
+#include <Arduino.h>
+
+// --- Mapeamento dos Pinos ---
+// Aqui a gente dá "apelidos" para os números das portas do Arduino, pra ficar mais fácil de ler.
+#define trig 5      // Pino que envia o pulso do sensor de distância
+#define echo 6      // Pino que recebe o eco do sensor de distância
+#define buzzer1 12    // O primeiro buzzer
+#define buzzer2 13    // O segundo buzzer
+#define led 11      // O LED que vai acender
+#define som A0      // A porta analógica onde o sensor de som está conectado
+
+// --- Variáveis Globais ---
+// São como "caixinhas" de memória que o código todo pode usar.
+long duracao_pulso; // Guarda o tempo (em microsegundos) que o som levou para ir e voltar
+int distancia_cm;   // Guarda a distância calculada em centímetros
+int barulho;        // Guarda o valor lido do sensor de som (de 0 a 1023)
+
+// --- Configuração Inicial (só roda uma vez quando liga o Arduino) ---
+void setup() {
+  // Avisa para o Arduino quais pinos vão ENVIAR energia/sinal (SAÍDA)
+  pinMode(trig, OUTPUT);
+  pinMode(buzzer1, OUTPUT);
+  pinMode(buzzer2, OUTPUT);
+  pinMode(led, OUTPUT);
+
+  // Avisa para o Arduino quais pinos vão RECEBER energia/sinal (ENTRADA)
+  pinMode(echo, INPUT);
+  pinMode(som, INPUT);
+
+  // Inicia a comunicação com o computador para a gente poder ver as mensagens no Monitor Serial
+  Serial.begin(9600);
+  Serial.println("=== Sistema Iniciado ===");
+}
+
+// --- Função que cria o alarme sonoro por 5 segundos ---
+void Alarme() {
+  // Este laço 'for' faz o código repetir 50 vezes, criando um som pulsado
+  for (int i = 0; i < 50; i++) {
+    digitalWrite(buzzer1, HIGH); // Liga os dois buzzers
+    digitalWrite(buzzer2, HIGH);
+    delay(50);                   // Espera um pouquinho com eles ligados
+    digitalWrite(buzzer1, LOW);  // Desliga os dois buzzers
+    digitalWrite(buzzer2, LOW);
+    delay(50);                   // Espera um pouquinho com eles desligados
+  }
+}
+
+// --- Função que mede a distância de um objeto ---
+void medeDistancia() {
+  // Manda um pulso de som bem curto pelo pino 'trig'
+  digitalWrite(trig, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trig, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trig, LOW);
+
+  // Ouve o pino 'echo' e mede quanto tempo o pulso demorou pra voltar
+  duracao_pulso = pulseIn(echo, HIGH);
+  // Calcula a distância em cm usando uma fórmula matemática simples
+  distancia_cm = duracao_pulso * 0.034 / 2;
+
+  // Se o valor for estranho (muito perto ou muito longe), provavelmente é um erro de leitura. A gente zera pra evitar bugs.
+  if (distancia_cm < 2 || distancia_cm > 400) {
+    distancia_cm = 0;
+  }
+}
+
+// --- Função que avisa se tem obstáculo perto ---
+ * O 'bool' no início da função significa que ela vai dar uma resposta do tipo VERDADEIRO ou FALSO.
+ * É como perguntar "Tem obstáculo?". A função só pode responder "sim" (true) ou "não" (false).
+ */
+bool alertaDeObstaculo() {
+  // Se a distância for maior que 0 E menor ou igual a 30...
+  if (distancia_cm > 0 && distancia_cm <= 30) {
+    
+    /*
+     * A função map() é uma "regra de três" automática. Ela converte um número de uma faixa para outra.
+     * map(valor_a_converter, faixa_original_min, faixa_original_max, faixa_nova_min, faixa_nova_max);
+     * Aqui, estamos convertendo a 'distancia_cm' (que varia de 1 a 30) para um 'tempo_bipe' (que vai variar de 50 a 300).
+     * Se a distância for 30 (longe), o tempo será 300 (bipe lento). Se a distância for 1 (perto), o tempo será 50 (bipe rápido).
+     */
+    int tempo_bipe = map(distancia_cm, 1, 30, 50, 300);
+
+    // Cria o bipe rápido
+    digitalWrite(buzzer1, HIGH);
+    digitalWrite(buzzer2, HIGH);
+    delay(50);
+    digitalWrite(buzzer1, LOW);
+    digitalWrite(buzzer2, LOW);
+    delay(tempo_bipe); // A pausa entre os bipes varia com a distância
+
+    return true; // Responde "VERDADEIRO!" (Sim, tem um obstáculo!)
+  }
+  return false; // Se não entrou no if, responde "FALSO!" (Não, o caminho está livre!)
+}
+
+// --- Função que verifica o nível do som e decide o que fazer ---
+void VerificaBarulho() {
+  // Lê o valor do sensor de som e guarda na variável 'barulho'
+  barulho = analogRead(som);
+
+  // Se o barulho for 70 ou mais alto...
+  if (barulho >= 70) {
+    digitalWrite(led, HIGH); // ...acende o LED...
+    delay(5000);             // ...espera 5 segundos...
+    digitalWrite(led, LOW);  // ...e apaga.
+  } 
+  // Senão, se o barulho estiver entre 50 e 69...
+  else if (barulho >= 50 && barulho <= 69) {
+    Alarme(); // ...chama a função de alarme sonoro.
+  }
+}
+
+// --- Loop Principal (fica rodando sem parar) ---
+void loop() {
+  //  Primeiro, mede a distância
+  medeDistancia();
+
+  //  Manda as informações para o computador
+  Serial.print("Distancia: ");
+  Serial.print(distancia_cm);
+  Serial.print(" cm | Intensidade do Barulho: ");
+  Serial.println(analogRead(som));
+
+  /*
+   * O '!' é o operador de NEGAÇÃO. Ele inverte o resultado de 'alertaDeObstaculo()'.
+   * Se a função retorna 'false' (caminho livre), o '!' transforma em 'true', e o código entra no if.
+   * Se a função retorna 'true' (obstáculo perto), o '!' transforma em 'false', e o código NÃO entra no if.
+   * Resumindo, a linha abaixo significa: "SE NÃO houver um alerta de obstáculo..."
+   */
+  if (!alertaDeObstaculo()) {
+    //  ...só então, verifica se há algum barulho para alertar. Isso garante a prioridade do sensor de distância.
+    VerificaBarulho();
+  }
+
+  // Uma pequena pausa de 100 milissegundos antes de começar o loop de novo.
+  delay(100);
+}
