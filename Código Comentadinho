@@ -4,7 +4,7 @@
 // Aqui a gente dá "apelidos" para os números das portas do Arduino, pra ficar mais fácil de ler.
 #define trig 5      // Pino que envia o pulso do sensor de distância
 #define echo 6      // Pino que recebe o eco do sensor de distância
-#define buzzer1 12    // O primeiro buzzer
+#define buzzer1 9   // O primeiro buzzer
 #define buzzer2 13    // O segundo buzzer
 #define led 11      // O LED que vai acender
 #define som A0      // A porta analógica onde o sensor de som está conectado
