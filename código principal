@@ -2,7 +2,7 @@
 
 #define trig 5
 #define echo 6
-#define buzzer1 12
+#define buzzer1 9
 #define buzzer2 13
 #define led 11
 #define som A0
